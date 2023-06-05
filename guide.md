@@ -98,9 +98,9 @@ Moving Required Scripts
 -----------------------
 
 1.  Move the "zipandmove" script to either `/usr/bin/` or `/usr/local/bin`:
-
+'''
     sudo cp ~/Documents/zipandmove /usr/bin
-
+'''
 2.  Copy the "rpi\_back" script to either `/usr/bin/` or `/usr/local/bin`:
 
     sudo cp ~/Documents/rpi_back /usr/bin
