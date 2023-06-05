@@ -4,7 +4,7 @@ This repository contains the necessary files and instructions to set up a media 
 
 ## Guide
 
-The [System Restoration Guide](guide.html) provides a detailed step-by-step walkthrough to help you set up and configure the media server on a Raspberry Pi. The guide covers the installation of dependencies, configuration of the NFS server for file sharing, setting up the web server with Nginx, obtaining SSL/TLS certificates, and automating backups.
+The [System Restoration Guide](guide.md) provides a detailed step-by-step walkthrough to help you set up and configure the media server on a Raspberry Pi. The guide covers the installation of dependencies, configuration of the NFS server for file sharing, setting up the web server with Nginx, obtaining SSL/TLS certificates, and automating backups.
 
 ## Scripts
 
