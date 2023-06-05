@@ -8,7 +8,7 @@ LOGFILE=/home/monolith/zipandmove/zipandmove.log
 MEDIAFILES=/media/nfs/web/media-files
 
 # Set the email address for the destination
-DESTINATION_EMAIL="skydive@skydivemesquite.com"
+DESTINATION_EMAIL="your@email.com"
 
 # Function to log a message to the logfile
 log() {
