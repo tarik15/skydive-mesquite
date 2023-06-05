@@ -1,0 +1,93 @@
+#!/bin/bash
+
+# This script zips folders on /media/nfs/share to /media/nfs/web, moves the original folders to /media/nfs/backed,
+# deletes old backup files, sends an email with links to the zipped files, and performs various cleanup operations.
+
+LOCKFILE=/home/monolith/zipandmove/zipandmove.lock
+LOGFILE=/home/monolith/zipandmove/zipandmove.log
+MEDIAFILES=/media/nfs/web/media-files
+
+# Set the email address for the destination
+DESTINATION_EMAIL="skydive@skydivemesquite.com"
+
+# Function to log a message to the logfile
+log() {
+    local message="$1"
+    echo "$(date +"%Y-%m-%d %H:%M:%S") - $message" | tee -a "$LOGFILE"
+}
+
+# Create the lock file if it doesn't exist
+touch "$LOCKFILE"
+
+# Check if another instance is already running
+exec 9>"$LOCKFILE"
+if ! flock -n 9; then
+    log "Another instance of the script is already running. Exiting."
+    exit 1
+fi
+
+# Go to the external drive where the folders are located
+cd /media/nfs/share || { log "Failed to change directory. Exiting."; exit 1; }
+
+# Remove spaces in folder names to avoid issues
+log "Fixing file names"
+find -maxdepth 1 ! -path . -name "* *" -type d -exec rename 's/ /_/g' "{}" +
+
+# Add the current date to the directory names
+log "Adding date to directories"
+find -maxdepth 1 ! -path . -type d -exec mv '{}' '{}'-"$(date +%m-%d-%y)" ';'
+
+# Zip the folders
+log "Zipping files"
+mapfile -t folders < <(find -maxdepth 1 ! -path . -type d)
+for folder in "${folders[@]}"; do
+    zip -0rjq "${folder}".zip "$folder"
+done
+
+# Move the zip files to ~/Web and capture the links
+log "Moving zipped files"
+links=()
+for zip_file in ./*.zip; do
+    mv "$zip_file" /media/nfs/web
+    link="${zip_file#./}"
+    link="${link%.zip} is in https://skydivingstuff.com/media/${zip_file#./}"
+    links+=("$link")
+done
+
+# Move files to ~/Backed
+log "Moving files to backup folder"
+find -maxdepth 1 ! -path . -type d -exec mv '{}' /media/nfs/backed ';'
+
+# Delete old files on ~/Backed
+log "Deleting old files (180 days) from Backup"
+find /media/nfs/backed -type f -mtime +180 -delete
+
+# Delete old files on ~/Web
+log "Deleting old files (180 days) from web"
+find /media/nfs/web -type f -mtime +180 -delete
+
+log "Deleting old funjumper media (14 days) from web/fun"
+find /media/nfs/web/fun -type f -mtime +14 -delete
+
+# Create the media-files file if it doesn't exist
+touch "$MEDIAFILES"
+
+# Send an email to notify and provide links to the zipped files
+log "Sending email with links"
+new_links=$(printf "%s\n" "${links[@]}")
+echo "$new_links" >> "$MEDIAFILES"
+echo "$new_links" | mail -s "Media links of $(date +%m-%d-%y)" "$DESTINATION_EMAIL"
+
+# Print the links for reference
+log "Links:"
+for link in "${links[@]}"; do
+  log "$link"
+done
+
+# Cleanup and exit
+cleanup() {
+    rm "$LOCKFILE"
+}
+trap cleanup EXIT
+
+exit 0
