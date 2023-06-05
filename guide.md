@@ -104,14 +104,21 @@ Moving Required Scripts
 1.  Move the "zipandmove" script to either `/usr/bin/` or `/usr/local/bin`:
 
     `sudo cp ~/Documents/zipandmove /usr/bin`
+    
+2. Make the script executable
 
-2.  Copy the "rpi\_back" script to either `/usr/bin/` or `/usr/local/bin`:
+    `sudo chmod +x /usr/bin/zipandmove
+    
+3.  Copy the "rpi\_back" script to either `/usr/bin/` or `/usr/local/bin`:
 
     `sudo cp ~/Documents/rpi_back /usr/bin`
+4. Make rpi_back executable
 
-3.  Automate the "rpi\_back" script:
+    `sudo chmod +x /usr/bin/rpi_back`
+    
+5.  Automate the "rpi\_back" script:
 
     `sudo crontab -e`
 ```crontab
-    0 1 * * 1/2 /usr/local/bin/rpi_back.sh
+    0 1 * * 1/2 /usr/local/bin/rpi_back
 ```
