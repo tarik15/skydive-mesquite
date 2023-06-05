@@ -1,0 +1,57 @@
+#!/bin/bash
+
+LOCK_FILE="/tmp/backup.lock"
+SOURCE_DEVICE="/dev/mmcblk0"
+DESTINATION_DIR="/media/nfs/pi-backup"
+TIMESTAMP=$(date +%Y%m%d%H%M%S)
+FILENAME="backup_${TIMESTAMP}.img"
+LOG_FILE="/var/log/rpi_backup.log"
+MAX_DAYS=90
+EMAIL_ADDRESS="tarik15@gmail.com"
+
+# Set the PATH variable
+PATH="/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/usr/local/games:/usr/games"
+
+# Function to handle errors
+handle_error() {
+    local error_message="$1"
+    echo "Error: $error_message" >> "$LOG_FILE"
+    send_email "Backup Error" "$error_message"
+    rm "$LOCK_FILE"
+    exit 1
+}
+
+# Function to send email
+send_email() {
+    local subject="$1"
+    local message="$2"
+    echo "$message" | mail -s "$subject" "$EMAIL_ADDRESS"
+}
+
+# Check if the lock file exists
+if [ -e "$LOCK_FILE" ]; then
+    handle_error "Backup process is already running. Exiting."
+fi
+
+# Create the lock file
+touch "$LOCK_FILE" || handle_error "Failed to create lock file."
+
+# Create the destination directory if it doesn't exist
+mkdir -p "$DESTINATION_DIR" || handle_error "Failed to create destination directory."
+
+# Run the backup command
+sudo /usr/bin/dd if="$SOURCE_DEVICE" of="${DESTINATION_DIR}/${FILENAME}" bs=1M >> "$LOG_FILE" 2>&1 || handle_error "Backup failed."
+
+# Verify the backup was successful
+if [ $? -eq 0 ]; then
+    echo "Backup completed successfully." >> "$LOG_FILE"
+    send_email "Backup Success" "Backup completed successfully."
+else
+    handle_error "Backup command returned a non-zero exit code."
+fi
+
+# Remove backup files older than MAX_DAYS
+/usr/bin/find "$DESTINATION_DIR" -name "backup_*.img" -type f -mtime +$MAX_DAYS -delete || handle_error "Failed to remove old backup files."
+
+# Remove the lock file
+rm "$LOCK_FILE"
