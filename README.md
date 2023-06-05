@@ -22,6 +22,10 @@ The [System Restoration Guide](guide.md) provides a detailed step-by-step walkth
 
 If you discover any issues with the setup process, encounter bugs, or have suggestions for improvements, please feel free to open an issue or submit a pull request. We welcome and appreciate your contributions!
 
+## BASE Jumping is dangerous kids
+
+I created this guide in case I'm no longer here and folks at Skydive Mesquite need to fix or rebuild their Media Server. 
+
 ## License
 
 This project is licensed under the [GNU General Public License v3.0](LICENSE).
