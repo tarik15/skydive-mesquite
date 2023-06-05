@@ -14,7 +14,7 @@ The [System Restoration Guide](guide.md) provides a detailed step-by-step walkth
 
 ## Usage
 
-1. Follow the instructions provided in the [System Restoration Guide](guide.html) to set up the media server on your Raspberry Pi.
+1. Follow the instructions provided in the [System Restoration Guide](guide.md) to set up the media server on your Raspberry Pi.
 2. Use the `zipandmove` script located in the `scripts` directory to manage the media files, compress them into archives, and organize them for customer downloads.
 3. Utilize the `rpi_back` script located in the `scripts` directory to automate the backup process and ensure the system is regularly backed up.
 
