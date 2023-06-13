@@ -12,6 +12,8 @@ The [System Restoration Guide](guide.md) provides a detailed step-by-step walkth
 
 - [rpi_back](scripts/rpi_back): This shell script automates the backup process by creating system images and saving them to an external drive attached to the Raspberry Pi.
 
+- [funjumper](scripts/funjumper): This shell script is similar to [zipandmove] but sends the links to e-mails you provide while running it.
+  
 ## Usage
 
 1. Follow the instructions provided in the [System Restoration Guide](guide.md) to set up the media server on your Raspberry Pi.
