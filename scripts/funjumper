@@ -1,0 +1,117 @@
+#!/bin/bash
+
+LOCKFILE="/home/monolith/zipandmove/fun.lock"
+LOGFILE="/home/monolith/zipandmove/fun.log"
+SRC_FOLDER="/media/nfs/funjumper"
+DEST_FOLDER="/media/nfs/web/fun"
+
+# Function to log a message to the logfile
+log() {
+    local message="$1"
+    echo "$(date +"%Y-%m-%d %H:%M:%S") - $message" | tee -a "$LOGFILE"
+}
+
+# Function to validate email addresses
+validate_email() {
+    local email="$1"
+    local regex="^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}(\.[A-Za-z]{2,})?$"
+    if [[ $email =~ $regex ]]; then
+        return 0
+    else
+        return 1
+    fi
+}
+
+# Create the lock file if it doesn't exist
+touch "$LOCKFILE"
+
+# Check if another instance is already running
+exec 9>"$LOCKFILE"
+if ! flock -n 9; then
+    log "Another instance of the script is already running. Exiting."
+    exit 1
+fi
+
+# Fix file names by replacing spaces with underscores
+log "Fixing file names"
+find "$SRC_FOLDER" -name "* *" -type d -execdir rename 's/ /_/g' '{}' +
+
+# Zip the folders
+log "Zipping files"
+mapfile -t folders < <(find "$SRC_FOLDER" -maxdepth 1 ! -path "$SRC_FOLDER" -type d)
+for folder in "${folders[@]}"; do
+    zip -0rjq "${folder}.zip" "$folder"
+    if [ $? -ne 0 ]; then
+        log "Failed to zip folder $folder"
+        exit 1
+    fi
+done
+
+# Move the zip files to the destination folder and capture the links
+log "Moving zipped files"
+links=()
+for zip_file in "$SRC_FOLDER"/*.zip; do
+    mv "$zip_file" "$DEST_FOLDER"
+    if [ $? -ne 0 ]; then
+        log "Failed to move zip file $zip_file"
+        exit 1
+    fi
+    filename="${zip_file##*/}"
+    link="${filename%.zip} is in https://skydivingstuff.com/media/fun/$filename"
+    links+=("$link")
+done
+
+# Delete the source folders
+log "Deleting your unimpressive jump"
+find "$SRC_FOLDER" -maxdepth 1 ! -path "$SRC_FOLDER" -type d -execdir rm -r '{}' \;
+if [ $? -ne 0 ]; then
+    log "Failed to delete folders"
+    exit 1
+fi
+
+# Send an email to notify and provide links to the zipped files
+log "Sending email with links"
+new_links=$(printf "%s\n" "${links[@]}")
+
+valid_emails=()
+while true; do
+    echo 'Enter email addresses (separated by spaces): '
+    read -a email_list
+
+    for emailvar in "${email_list[@]}"; do
+        if validate_email "$emailvar"; then
+            valid_emails+=("$emailvar")
+        else
+            echo "Invalid email address: $emailvar"
+        fi
+    done
+
+    if [ ${#valid_emails[@]} -eq 0 ]; then
+        echo "No valid email addresses provided. Please try again."
+    else
+        break
+    fi
+done
+
+for emailvar in "${valid_emails[@]}"; do
+    echo "$new_links" | mail -s "Your unimpressive jumps, suck less next time" "$emailvar"
+    if [ $? -ne 0 ]; then
+        log "Failed to send email to $emailvar"
+        exit 1
+    fi
+done
+
+# Print the links for reference
+log "Links:"
+for link in "${links[@]}"; do
+    log "$link"
+done
+
+# Cleanup and exit
+cleanup() {
+    rm "$LOCKFILE"
+}
+trap cleanup EXIT
+
+exit 0
+
