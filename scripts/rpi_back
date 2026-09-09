@@ -94,3 +94,6 @@ find "$DESTINATION_DIR" -name "backup_*.img" -type f -mtime +$MAX_DAYS -delete |
     handle_error "Failed to remove old backup files from $DESTINATION_DIR."
 
 log "Removed any backups older than $MAX_DAYS days"
+
+# Ensure the log is readable by the web UI user
+chmod 644 "$LOG_FILE"

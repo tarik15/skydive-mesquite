@@ -82,6 +82,12 @@ find -maxdepth 1 ! -path . -type d -exec mv '{}' '{}'-"$(date +%m-%d-%y)" ';'
 # Zip the folders
 log "Zipping files"
 mapfile -t folders < <(find -maxdepth 1 ! -path . -type d)
+
+if [ ${#folders[@]} -eq 0 ]; then
+    log "No folders found in /media/nfs/share. Nothing to do."
+    exit 0
+fi
+
 for folder in "${folders[@]}"; do
     zip -0rjq "${folder}".zip "$folder"
 done

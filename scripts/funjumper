@@ -78,6 +78,12 @@ done
 # Zip the folders
 log "Zipping files"
 mapfile -t folders < <(find "$SRC_FOLDER" -maxdepth 1 ! -path "$SRC_FOLDER" -type d)
+
+if [ ${#folders[@]} -eq 0 ]; then
+    log "No folders found in $SRC_FOLDER. Nothing to do."
+    exit 0
+fi
+
 for folder in "${folders[@]}"; do
     zip -0rjq "${folder}.zip" "$folder"
     if [ $? -ne 0 ]; then
@@ -113,27 +119,46 @@ log "Sending email with links"
 new_links=$(printf "%s\n" "${links[@]}")
 
 valid_emails=()
-while true; do
-    echo 'Enter email addresses (separated by spaces): '
-    read -a email_list
 
-    for emailvar in "${email_list[@]}"; do
+# When called with --emails addr1 addr2 ..., skip the interactive prompt.
+# Used by the web UI; CLI interactive mode is preserved when no args are given.
+if [[ "${1:-}" == "--emails" ]]; then
+    shift
+    for emailvar in "$@"; do
         if validate_email "$emailvar"; then
             valid_emails+=("$emailvar")
         else
-            echo "Invalid email address: $emailvar"
+            log "Invalid email address provided via --emails: $emailvar"
+            exit 1
         fi
     done
-
     if [ ${#valid_emails[@]} -eq 0 ]; then
-        echo "No valid email addresses provided. Please try again."
-    else
-        break
+        log "No valid email addresses provided via --emails. Exiting."
+        exit 1
     fi
-done
+else
+    while true; do
+        echo 'Enter email addresses (separated by spaces): '
+        read -a email_list
+
+        for emailvar in "${email_list[@]}"; do
+            if validate_email "$emailvar"; then
+                valid_emails+=("$emailvar")
+            else
+                echo "Invalid email address: $emailvar"
+            fi
+        done
+
+        if [ ${#valid_emails[@]} -eq 0 ]; then
+            echo "No valid email addresses provided. Please try again."
+        else
+            break
+        fi
+    done
+fi
 
 for emailvar in "${valid_emails[@]}"; do
-    echo "$new_links" | mail -s "Your unimpressive jumps, suck less next time" "$emailvar"
+    printf "%s\n\n--\nThe truest reference frame is found when gravity and you agree to accelerate together. -ChatGPT\n" "$new_links" | mail -s "Your skydiving videos are here" "$emailvar"
     if [ $? -ne 0 ]; then
         log "Failed to send email to $emailvar"
         exit 1
