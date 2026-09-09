@@ -11,6 +11,25 @@ log() {
     echo "$(date +"%Y-%m-%d %H:%M:%S") - $message" | tee -a "$LOGFILE"
 }
 
+# Function to log an error to the screen and the logfile
+log_error() {
+    local message="$1"
+    echo "$(date +"%Y-%m-%d %H:%M:%S") - ERROR: $message" | tee -a "$LOGFILE" >&2
+}
+
+# Function to turn a typed folder name into a predictable one:
+# runs of blanks collapse to a single blank, leading and trailing blanks are
+# dropped, blanks become underscores, and the result is lower cased.
+# "  TANDEM   Bob Smith " becomes "tandem_bob_smith".
+normalize_name() {
+    local name="$1"
+    name="$(printf '%s' "$name" | tr -s '[:space:]' ' ')"
+    name="${name# }"
+    name="${name% }"
+    name="${name// /_}"
+    printf '%s' "${name,,}"
+}
+
 # Function to validate email addresses
 validate_email() {
     local email="$1"
@@ -32,9 +51,29 @@ if ! flock -n 9; then
     exit 1
 fi
 
-# Fix file names by replacing spaces with underscores
+# Normalize folder names so the zip names, and the download links they turn into,
+# are predictable no matter how the folder was typed.
 log "Fixing file names"
-find "$SRC_FOLDER" -name "* *" -type d -execdir rename 's/ /_/g' '{}' +
+for folder in "$SRC_FOLDER"/*/; do
+    folder="${folder%/}"
+    [ -d "$folder" ] || continue
+    base_name="${folder##*/}"
+    new_name="$(normalize_name "$base_name")"
+    if [ -z "$new_name" ]; then
+        log_error "Folder '$base_name' has no usable name once blanks are removed. Leaving it as is."
+        continue
+    fi
+    [ "$new_name" = "$base_name" ] && continue
+    if [ -e "$SRC_FOLDER/$new_name" ]; then
+        suffix=2
+        while [ -e "$SRC_FOLDER/${new_name}-${suffix}" ]; do
+            suffix=$((suffix + 1))
+        done
+        log_error "Two folders share the name '$new_name'. Publishing '$base_name' as '${new_name}-${suffix}' instead. Check that these are two different jumps before sending the links."
+        new_name="${new_name}-${suffix}"
+    fi
+    mv -- "$folder" "$SRC_FOLDER/$new_name" || log_error "Failed to rename '$base_name' to '$new_name'"
+done
 
 # Zip the folders
 log "Zipping files"

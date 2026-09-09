@@ -1,9 +1,20 @@
 System Restoration Guide for Raspberry Pi
-
-System Restoration Guide for Raspberry Pi
 =========================================
 
-This guide will walk you through the process of restoring a Raspberry Pi system to run the server developed by Tarik. This server enables Skydive Mesquite to have their own local server and provide links for customers to download their jump media. The server is controlled by Nginx, files are read from a shared NFS folder, and most of the system is managed through a shell script called "zipandmove". Additionally, there is a backup routine that runs every two weeks, saving an image of the entire system on an external drive attached to the Raspberry Pi.
+This guide will walk you through the process of restoring a Raspberry Pi system to run the server developed by Tarik. This server enables Skydive Mesquite to have their own local server and provide links for customers to download their jump media. The server is controlled by Nginx, files are read from a shared NFS folder, and most of the system is managed through the shell scripts "zipandmove" (tandem media) and "funjumper" (fun jumper media). Additionally, there is a backup routine that saves an image of the entire system to `/media/nfs/pi-backup`.
+
+Everything below matches what the scripts in `scripts/` actually do. If you change a path here, change it in the scripts too.
+
+Installing Dependencies
+-----------------------
+
+The scripts rely on `zip` and `mail`:
+
+`sudo apt update`
+
+`sudo apt install zip mailutils`
+
+Note: `mailutils` provides the `mail` command, but the Pi still needs a working mail transport (a local MTA or an SMTP relay) before any of the notification e-mails will actually leave the machine. If mail was previously configured on this Pi, restore that configuration as well, otherwise the scripts will still zip and publish media correctly but the e-mail steps will fail.
 
 Setting up NFS Server for Other Machines
 ----------------------------------------
@@ -18,7 +29,7 @@ Setting up NFS Server for Other Machines
 
 3.  Create the directory to be shared with others:
 
-    `mkdir -p /media/nfs`
+    `sudo mkdir -p /media/nfs`
 
 4.  Edit the NFS configuration file:
 
@@ -31,6 +42,35 @@ Setting up NFS Server for Other Machines
 6.  Export the new configuration:
 
     `sudo exportfs -arv`
+
+Creating the Directory Layout
+-----------------------------
+
+The scripts do not create most of their working directories, and they will fail if these are missing. Create all of them up front:
+
+```bash
+sudo mkdir -p /media/nfs/share \
+              /media/nfs/funjumper \
+              /media/nfs/web/fun \
+              /media/nfs/backed \
+              /media/nfs/pi-backup
+sudo chown -R 1000:1000 /media/nfs
+mkdir -p /home/monolith/zipandmove
+```
+
+What each directory is for:
+
+| Directory | Purpose |
+| --- | --- |
+| `/media/nfs/share` | Drop folder for tandem media. `zipandmove` reads from here. |
+| `/media/nfs/funjumper` | Drop folder for fun jumper media. `funjumper` reads from here. |
+| `/media/nfs/web` | Zipped tandem media served by Nginx. Cleared after 180 days. |
+| `/media/nfs/web/fun` | Zipped fun jumper media served by Nginx. Cleared after 14 days. |
+| `/media/nfs/backed` | Original tandem folders, kept for 180 days. |
+| `/media/nfs/pi-backup` | System images written by `rpi_back`, kept for 90 days. |
+| `/home/monolith/zipandmove` | Lock files and logs for `zipandmove` and `funjumper`. |
+
+The `chown` to `1000:1000` matches the `anonuid`/`anongid` in the NFS export above, so files written over NFS and files written by the scripts have the same owner. If the primary user on this Pi is not UID 1000, use that user's UID and GID instead and update the export line to match.
 
 Connecting to the NFS from Other Computers (not the Raspberry Pi)
 -----------------------------------------------------------------
@@ -62,34 +102,40 @@ Setting up the Web Server with Nginx
 
     `sudo apt install nginx`
 
-2.  Create a configuration file for skydivingstuff.com:
+2.  Create a configuration file for skydivingstuff.com. The filename **must** end in `.conf`, because Nginx only includes `/etc/nginx/conf.d/*.conf`:
 
-    `sudo nano /etc/nginx/conf.d/www.skydivingstuff.com`
+    `sudo nano /etc/nginx/conf.d/www.skydivingstuff.com.conf`
 
 3.  Paste the following configuration into the file:
 ```nginx
     server {
+        listen 80;
         server_name skydivingstuff.com www.skydivingstuff.com;
-    
-        location /media {
-            alias /home/monolith/Web/;
+
+        location /media/ {
+            alias /media/nfs/web/;
         }
-    
+
         location / {
             return 301 https://skydivemesquite.com;
         }
     }
 ```
+The `alias` must point at `/media/nfs/web/`, which is where `zipandmove` and `funjumper` put the finished zip files. This is what makes the links the scripts e-mail out resolve:
+
+  - `zipandmove` produces `https://skydivingstuff.com/media/NAME.zip` -> `/media/nfs/web/NAME.zip`
+  - `funjumper` produces `https://skydivingstuff.com/media/fun/NAME.zip` -> `/media/nfs/web/fun/NAME.zip`
+
 4.  Follow the instructions in this [guide](https://www.nginx.com/blog/using-free-ssltls-certificates-from-lets-encrypt-with-nginx/) to obtain and configure a free SSL/TLS certificate from Let's Encrypt with Nginx:
 
     `sudo apt update`
-    
+
     `sudo apt install certbot`
-    
+
     `sudo apt install python3-certbot-nginx`
-    
-    `sudo nginx -t && nginx -s reload`
-    
+
+    `sudo nginx -t && sudo systemctl reload nginx`
+
     `sudo certbot --nginx -d skydivingstuff.com -d www.skydivingstuff.com`
 
 5.  Automate the certificate renewal process:
@@ -98,27 +144,51 @@ Setting up the Web Server with Nginx
 ```crontab
     0 12 * * * /usr/bin/certbot renew --quiet
 ```
-Moving Required Scripts
------------------------
+6.  Confirm a customer link actually downloads. Drop a test zip into `/media/nfs/web/` and fetch it:
 
-1.  Move the "zipandmove" script to either `/usr/bin/` or `/usr/local/bin`:
+    `curl -I https://skydivingstuff.com/media/test.zip`
 
-    `sudo cp ~/Documents/zipandmove /usr/bin`
-    
-2. Make the script executable
+    A `200` means the alias and permissions are correct. A `403` means the Nginx worker cannot read the files, so recheck the ownership set in "Creating the Directory Layout".
 
-    `sudo chmod +x /usr/bin/zipandmove
-    
-3.  Copy the "rpi\_back" script to either `/usr/bin/` or `/usr/local/bin`:
+Installing the Scripts
+----------------------
 
-    `sudo cp ~/Documents/rpi_back /usr/bin`
-4. Make rpi_back executable
+All three scripts go in `/usr/local/bin`, which is where the cron entries below expect them.
 
-    `sudo chmod +x /usr/bin/rpi_back`
-    
-5.  Automate the "rpi\_back" script:
+1.  Copy the scripts into place:
+
+    `sudo cp ~/Documents/zipandmove ~/Documents/funjumper ~/Documents/rpi_back /usr/local/bin`
+
+2.  Make them executable:
+
+    `sudo chmod +x /usr/local/bin/zipandmove /usr/local/bin/funjumper /usr/local/bin/rpi_back`
+
+3.  Set the notification e-mail addresses. Both scripts ship with placeholder addresses that must be changed:
+
+    - `zipandmove` -> `DESTINATION_EMAIL` (currently `your@email.com`)
+    - `rpi_back` -> `EMAIL_ADDRESS` (currently `admin@yourdoman.com`)
+
+    `funjumper` prompts for its recipients when you run it, so it needs no edit.
+
+4.  Automate the "rpi\_back" script. It runs on the 1st and 15th of each month at 01:00, which is the every-two-weeks cadence the backup routine is meant to have:
 
     `sudo crontab -e`
 ```crontab
-    0 1 * * 1/2 /usr/local/bin/rpi_back
+    0 1 1,15 * * /usr/local/bin/rpi_back
 ```
+Running the Scripts
+-------------------
+
+`zipandmove` is run by hand when a day's tandem media is ready to publish:
+
+`zipandmove`
+
+`funjumper` is also run by hand, and will prompt for the e-mail addresses to send the links to:
+
+`funjumper`
+
+Before zipping, both scripts normalize the top level folder names in their drop folder, so it does not matter how carefully the folder was typed. Runs of blanks collapse to one, leading and trailing blanks are dropped, blanks become underscores, and the result is lower cased: `  TANDEM   Bob Smith ` is published as `tandem_bob_smith.zip`. Underscores that were typed on purpose are left alone. Download links are case sensitive, so this is what keeps them predictable no matter how the folder was typed. If two folders in the same batch normalize to the same name, both are still published: the second one gets a `-2` suffix (`tandem_bob-2.zip`), and the script prints an `ERROR:` line to the screen and to the log naming both folders. That is not fatal, but it means two jumps had the same name, so confirm they really are different jumps before sending the links out. Errors are written to standard error, so `zipandmove 2> errors.txt` will capture just those.
+
+Both write progress to `/home/monolith/zipandmove/zipandmove.log` and `/home/monolith/zipandmove/fun.log` respectively. If a script reports that another instance is already running and you are certain it is not, check for a stale lock file in `/home/monolith/zipandmove/`.
+
+`rpi_back` runs from cron and logs to `/var/log/rpi_backup.log`. Its lock file is `/tmp/backup.lock`; if a backup is interrupted, that file may need to be removed by hand before the next run will start.
