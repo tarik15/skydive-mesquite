@@ -1,0 +1,27 @@
+services:
+  ui:
+    build:
+      context: .
+      args:
+        MONOLITH_UID: ${MONOLITH_UID:-1000}
+        MONOLITH_GID: ${MONOLITH_GID:-1000}
+    ports:
+      - "127.0.0.1:5000:5000"
+    volumes:
+      - /media/nfs/share:/media/nfs/share
+      - /media/nfs/web:/media/nfs/web
+      - /media/nfs/backed:/media/nfs/backed
+      - /media/nfs/funjumper:/media/nfs/funjumper
+      - /home/monolith/zipandmove:/home/monolith/zipandmove
+      - /var/log/rpi_backup.log:/var/log/rpi_backup.log:ro
+      - /etc/msmtprc:/etc/msmtprc:ro
+      - /var/log/msmtp:/var/log/msmtp
+    environment:
+      - SECRET_KEY=${SECRET_KEY}
+      - ADMIN_USER=${ADMIN_USER}
+      - ADMIN_PASSWORD=${ADMIN_PASSWORD}
+      - STAFF_USER=${STAFF_USER}
+      - STAFF_PASSWORD=${STAFF_PASSWORD}
+    restart: unless-stopped
+    extra_hosts:
+      - "host.docker.internal:host-gateway"

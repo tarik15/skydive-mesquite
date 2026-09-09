@@ -1,0 +1,130 @@
+{% extends "base.html" %}
+{% block content %}
+<h1>Fun Jumper</h1>
+
+<div class="card">
+  <h2 class="section">Upload footage</h2>
+  <div class="drop-zone" id="drop-zone">
+    <p class="dz-title">Drop folders here</p>
+    <p class="dz-sub">or</p>
+    <label for="file-input" class="btn" style="cursor:pointer;">Browse folder</label>
+    <input type="file" id="file-input" webkitdirectory multiple style="display:none;">
+  </div>
+
+  <p id="file-count" style="color:var(--muted);font-size:.875rem;margin-bottom:1.2rem;">No files selected</p>
+
+  <div style="margin-bottom:1.2rem;max-width:320px;">
+    <label class="field-label" for="folder-name">Folder name</label>
+    <input type="text" id="folder-name" placeholder="Arnaldo-URracist">
+  </div>
+
+  <div class="progress-wrap" id="progress-wrap" style="display:none;">
+    <div class="progress-track"><div class="progress-fill" id="progress-fill"></div></div>
+    <p class="progress-text" id="progress-text">0%</p>
+  </div>
+
+  <div id="upload-result"></div>
+  <button id="upload-btn" class="btn-cta">Upload</button>
+</div>
+
+<div class="card">
+  <h2 class="section">Send links</h2>
+  {% if error %}<p class="error">{{ error }}</p>{% endif %}
+
+  <form method="POST" action="/ui/funjumper" id="send-form">
+    <div style="margin-bottom:1rem;">
+      <label class="field-label" for="emails">Email addresses</label>
+      <textarea id="emails" name="emails" rows="4"
+        placeholder="james@two.out&#10;trent@bounce.bingo">{{ prefill or "" }}</textarea>
+      <p style="color:var(--muted);font-size:.8rem;margin-top:.35rem;">One per line, or space/comma separated.</p>
+    </div>
+    <button class="btn-cta" type="submit">Compress &amp; Send Links</button>
+  </form>
+</div>
+
+<script>
+  const allFiles = [];
+  const zone = document.getElementById('drop-zone');
+
+  zone.addEventListener('dragover', e => { e.preventDefault(); zone.classList.add('drag-over'); });
+  zone.addEventListener('dragleave', () => zone.classList.remove('drag-over'));
+  zone.addEventListener('drop', async e => {
+    e.preventDefault(); zone.classList.remove('drag-over');
+    const entries = Array.from(e.dataTransfer.items)
+      .map(i => i.webkitGetAsEntry && i.webkitGetAsEntry()).filter(Boolean);
+    addFiles((await Promise.all(entries.map(readEntry))).flat());
+  });
+  document.getElementById('file-input').addEventListener('change', e => addFiles(Array.from(e.target.files)));
+
+  async function readEntry(entry) {
+    if (entry.isFile) return new Promise(res => entry.file(f => res([f])));
+    if (entry.isDirectory) {
+      const entries = await drainReader(entry.createReader());
+      return (await Promise.all(entries.map(readEntry))).flat();
+    }
+    return [];
+  }
+  async function drainReader(reader) {
+    const all = [];
+    while (true) { const b = await new Promise(res => reader.readEntries(res)); if (!b.length) break; all.push(...b); }
+    return all;
+  }
+  function addFiles(files) {
+    allFiles.push(...files);
+    const n = allFiles.length;
+    document.getElementById('file-count').textContent = n ? `${n} file${n===1?'':'s'} selected` : 'No files selected';
+  }
+
+  let uploadedThisSession = false;
+
+  document.getElementById('upload-btn').addEventListener('click', () => {
+    const folderName = document.getElementById('folder-name').value.trim();
+    const resultEl = document.getElementById('upload-result');
+    if (!folderName) { resultEl.innerHTML = '<p class="error">Please enter a folder name.</p>'; return; }
+    if (!allFiles.length) { resultEl.innerHTML = '<p class="error">No files selected.</p>'; return; }
+
+    const fd = new FormData();
+    fd.append('folder_name', folderName);
+    fd.append('destination', 'funjumper');
+    allFiles.forEach(f => fd.append('files', f, f.name));
+
+    const btn = document.getElementById('upload-btn');
+    btn.disabled = true; btn.textContent = 'Uploading…';
+    resultEl.innerHTML = '';
+    document.getElementById('progress-wrap').style.display = 'block';
+
+    const xhr = new XMLHttpRequest();
+    xhr.upload.onprogress = e => {
+      if (e.lengthComputable) {
+        const pct = Math.round(e.loaded / e.total * 100);
+        document.getElementById('progress-fill').style.width = pct + '%';
+        document.getElementById('progress-text').textContent = pct + '%';
+      }
+    };
+    xhr.onload = () => {
+      btn.disabled = false; btn.textContent = 'Upload';
+      try {
+        const data = JSON.parse(xhr.responseText);
+        if (xhr.status === 200) {
+          uploadedThisSession = true;
+          document.getElementById('progress-fill').classList.add('done');
+          resultEl.innerHTML = `<div class="alert alert-success" style="margin-top:.75rem;">&#10003; ${data.count} file${data.count===1?'':'s'} saved to <code>${data.target}</code> — scroll down to send links.</div>`;
+        } else {
+          resultEl.innerHTML = `<div class="alert alert-error" style="margin-top:.75rem;">${data.error}</div>`;
+        }
+      } catch { resultEl.innerHTML = '<div class="alert alert-error" style="margin-top:.75rem;">Unexpected server error.</div>'; }
+    };
+    xhr.onerror = () => { btn.disabled = false; btn.textContent = 'Upload'; resultEl.innerHTML = '<div class="alert alert-error" style="margin-top:.75rem;">Network error.</div>'; };
+    xhr.open('POST', '/ui/upload');
+    xhr.send(fd);
+  });
+
+  document.getElementById('send-form').addEventListener('submit', e => {
+    if (!uploadedThisSession) {
+      if (!confirm("You haven't uploaded any files this session.\n\nProceed anyway? (OK if you uploaded previously)")) {
+        e.preventDefault();
+      }
+    }
+  });
+</script>
+{% endblock %}

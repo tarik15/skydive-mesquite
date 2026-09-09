@@ -283,6 +283,74 @@ All three scripts live in `/usr/bin`, which is where the cron entry below expect
     `ls -lh /media/nfs/pi-backup`
 
     This copies the whole SD card, so it takes a while and the image is as large as the card. Check there is room for it first with `df -h /media/nfs`, and remember `MAX_DAYS` in the script keeps 90 days of images.
+Setting up the Web UI
+---------------------
+
+Staff use a small web interface instead of SSH. It runs in Docker as the `monolith` user, listens only on `127.0.0.1:5000`, and Nginx proxies `/ui` to it. `install.sh` handles all of this; the steps below are what it does and how to check it worked.
+
+1.  Install Docker if it is not present:
+
+    `curl -fsSL https://get.docker.com | sudo sh`
+
+    `sudo usermod -aG docker monolith`
+
+2.  Set the logins. `install.sh` creates `.env` from `.env.example` with a random `SECRET_KEY` already generated, and leaves the passwords blank:
+
+    `sudo nano .env`
+```bash
+    MONOLITH_UID=1000
+    MONOLITH_GID=1000
+    SECRET_KEY=<generated for you>
+    ADMIN_USER=admin
+    ADMIN_PASSWORD=<choose one>
+    STAFF_USER=user
+    STAFF_PASSWORD=<choose one>
+```
+    `MONOLITH_UID` and `MONOLITH_GID` must match the Pi's `monolith` user, from `id monolith`, or the container cannot write the NFS directories. The admin account can publish tandem media and read the links and logs pages; the staff account can only use the fun jumper page. The app refuses to start if `SECRET_KEY` is empty, because a blank or shared key would let anyone forge a login.
+
+3.  Add the web UI to the public site. `install.sh` puts the location blocks in `/etc/nginx/snippets/skydive-ui.conf`; they have to be pulled into the existing TLS server block, which the installer cannot safely edit for you:
+
+    `sudo nano /etc/nginx/conf.d/www.skydivingstuff.com.conf`
+
+    Add this line inside the `listen 443 ssl` server block, after the `location /media/` block:
+```nginx
+    include /etc/nginx/snippets/skydive-ui.conf;
+```
+    `sudo nginx -t && sudo systemctl reload nginx`
+
+    The LAN-only vhost on port 8080 is a complete server block, so the installer drops it straight into `/etc/nginx/conf.d/skydive-local.conf` with nothing more to do.
+
+4.  Build and start it:
+
+    `sudo ./install.sh`
+
+    or, on its own:
+
+    `docker compose up -d --build`
+
+5.  Check it is up:
+
+    `docker compose ps`
+
+    `curl -I http://127.0.0.1:5000/ui/login`
+
+    Then load `https://skydivingstuff.com/ui/` and log in. On the dropzone LAN, `http://monolith.local:8080/ui/` works without TLS.
+
+The container mounts the NFS directories, `/etc/msmtprc`, and `/var/log/rpi_backup.log` from the Pi, so it publishes to the same places the command line scripts do. It builds the scripts from the `scripts` directory in this repository, the same files `install.sh` puts in `/usr/bin`, so the web UI and the command line can never drift apart.
+
+Credentials to Restore
+----------------------
+
+None of the real credentials are in this repository. After a rebuild, three files have to be filled in by hand, and nothing works properly until they are. `install.sh` creates each from its template and warns about anything still blank.
+
+| File on the Pi | Template | What it holds |
+| --- | --- | --- |
+| `/etc/skydive-media.conf` | `skydive-media.conf.example` | Where the scripts send links and backup notices |
+| `/etc/msmtprc` | `docker/msmtprc.example` | The Gmail account and app password used to send |
+| `.env` in this repository | `.env.example` | Web UI logins and the session key |
+
+Keep private copies of all three somewhere other than this repository. Without them a rebuilt server publishes media correctly but cannot e-mail anyone and has no working web UI.
+
 Running the Scripts
 -------------------
 

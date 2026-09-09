@@ -1,0 +1,20 @@
+# The build only needs scripts/ and webapp/. Everything else just makes the
+# context bigger, which matters on a Raspberry Pi.
+.git
+.githooks
+.gitignore
+canopy/
+*.md
+LICENSE
+install.sh
+nginx/
+docker/
+.env
+.env.example
+*.example
+reference.png
+**/__pycache__
+**/*.pyc
+**/venv/
+webapp/access.log
+webapp/error.log

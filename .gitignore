@@ -1,0 +1,19 @@
+# Real credentials. Only the .example files belong in git.
+.env
+docker/msmtprc
+msmtprc
+*.htpasswd
+skydive-media.conf
+
+# The private repo this web UI came from, if it is still checked out here.
+/canopy/
+
+# Python
+__pycache__/
+*.pyc
+venv/
+webapp/access.log
+webapp/error.log
+
+# Large local reference art
+/reference.png

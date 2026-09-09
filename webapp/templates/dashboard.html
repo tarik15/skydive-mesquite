@@ -1,0 +1,30 @@
+{% extends "base.html" %}
+{% block content %}
+<h1>Dashboard</h1>
+
+<div class="card">
+  <h2 class="section">Fun Jumper</h2>
+  <p class="card-desc">Upload fun jump footage and email download links to customers.</p>
+  <a class="btn" href="/ui/funjumper">Open Fun Jumper</a>
+</div>
+
+{% if is_admin %}
+<div class="card">
+  <h2 class="section">Tandem</h2>
+  <p class="card-desc">Upload and process tandem footage. Run zipandmove to compress, publish, and email links.</p>
+  <a class="btn" href="/ui/tandem">Open Tandem</a>
+</div>
+
+<div class="card">
+  <h2 class="section">Media Links</h2>
+  <p class="card-desc">Browse all download links recorded in <code>/media/nfs/web/media-files</code>.</p>
+  <a class="btn" href="/ui/links">View Links</a>
+</div>
+
+<div class="card">
+  <h2 class="section">Logs</h2>
+  <p class="card-desc">View the last 100 lines of the zipandmove, funjumper, and rpi_back log files.</p>
+  <a class="btn" href="/ui/logs">View Logs</a>
+</div>
+{% endif %}
+{% endblock %}

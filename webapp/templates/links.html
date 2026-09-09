@@ -1,0 +1,27 @@
+{% extends "base.html" %}
+{% block content %}
+<h1>Media Links</h1>
+
+<div class="card">
+  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:1rem;">
+    <p style="color:var(--muted);font-size:.875rem;">Contents of <code>/media/nfs/web/media-files</code></p>
+    <a href="/ui/links" class="btn" style="font-size:.8rem;padding:.35rem .9rem;">Refresh</a>
+  </div>
+
+  {% if lines %}
+    <ul style="list-style:none;">
+      {% for prefix, url in lines %}
+        <li style="padding:.55rem 0;border-bottom:1px solid var(--border);font-size:.9rem;color:var(--text);">
+          {% if url %}
+            {{ prefix }}<a href="{{ url }}" target="_blank" style="color:var(--accent);font-weight:500;">{{ url }}</a>
+          {% else %}
+            {{ prefix }}
+          {% endif %}
+        </li>
+      {% endfor %}
+    </ul>
+  {% else %}
+    <p style="color:var(--muted);">No links found.</p>
+  {% endif %}
+</div>
+{% endblock %}

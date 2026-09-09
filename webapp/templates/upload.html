@@ -1,0 +1,121 @@
+{% extends "base.html" %}
+{% block content %}
+<h1>Upload Fun Jump Media</h1>
+
+<div class="card">
+  <div id="drop-zone" style="border:2px dashed #ccc;border-radius:6px;padding:2.5rem;text-align:center;cursor:pointer;transition:border-color .2s,background .2s;margin-bottom:1.2rem;">
+    <p style="font-size:1.05rem;color:#555;margin-bottom:.6rem;">Drop folders here</p>
+    <p style="color:#999;font-size:.9rem;margin-bottom:1rem;">or</p>
+    <label for="file-input" class="btn" style="cursor:pointer;">Browse folder</label>
+    <input type="file" id="file-input" webkitdirectory multiple style="display:none;">
+  </div>
+
+  <p id="file-count" style="color:#555;font-size:.95rem;margin-bottom:1.2rem;">No files selected</p>
+
+  <div style="margin-bottom:1.2rem;">
+    <label style="display:block;font-weight:bold;font-size:.95rem;margin-bottom:.4rem;">Folder name</label>
+    <input type="text" id="folder-name" placeholder="e.g. John-Smith" style="width:100%;max-width:320px;padding:.5rem;border:1px solid #ccc;border-radius:4px;font-size:.95rem;">
+  </div>
+
+  <div id="progress-wrap" style="display:none;margin-bottom:1.2rem;">
+    <div style="background:#e9e9e9;border-radius:4px;overflow:hidden;height:18px;">
+      <div id="progress-bar" style="height:100%;width:0%;background:#1a1a2e;transition:width .1s;"></div>
+    </div>
+    <p id="progress-text" style="font-size:.85rem;color:#555;margin-top:.3rem;">0%</p>
+  </div>
+
+  <div id="result"></div>
+  <button id="upload-btn" class="btn">Upload</button>
+</div>
+
+<style>#drop-zone.drag-over { border-color:#1a1a2e; background:#f0f0f8; }</style>
+
+<script>
+  const allFiles = [];
+  const zone = document.getElementById('drop-zone');
+
+  zone.addEventListener('dragover', e => { e.preventDefault(); zone.classList.add('drag-over'); });
+  zone.addEventListener('dragleave', () => zone.classList.remove('drag-over'));
+  zone.addEventListener('drop', async e => {
+    e.preventDefault();
+    zone.classList.remove('drag-over');
+    const entries = Array.from(e.dataTransfer.items)
+      .map(i => i.webkitGetAsEntry && i.webkitGetAsEntry()).filter(Boolean);
+    addFiles((await Promise.all(entries.map(readEntry))).flat());
+  });
+
+  document.getElementById('file-input').addEventListener('change', e => {
+    addFiles(Array.from(e.target.files));
+  });
+
+  async function readEntry(entry) {
+    if (entry.isFile) return new Promise(res => entry.file(f => res([f])));
+    if (entry.isDirectory) {
+      const entries = await drainReader(entry.createReader());
+      return (await Promise.all(entries.map(readEntry))).flat();
+    }
+    return [];
+  }
+
+  async function drainReader(reader) {
+    const all = [];
+    while (true) {
+      const batch = await new Promise(res => reader.readEntries(res));
+      if (!batch.length) break;
+      all.push(...batch);
+    }
+    return all;
+  }
+
+  function addFiles(files) {
+    allFiles.push(...files);
+    const n = allFiles.length;
+    document.getElementById('file-count').textContent =
+      n === 0 ? 'No files selected' : `${n} file${n === 1 ? '' : 's'} selected`;
+  }
+
+  document.getElementById('upload-btn').addEventListener('click', () => {
+    const folderName = document.getElementById('folder-name').value.trim();
+    const result = document.getElementById('result');
+    if (!folderName) { result.innerHTML = '<p class="error">Please enter a folder name.</p>'; return; }
+    if (!allFiles.length) { result.innerHTML = '<p class="error">No files selected.</p>'; return; }
+    submitUpload('funjumper', folderName, allFiles, result);
+  });
+
+  function submitUpload(destination, folderName, files, resultEl) {
+    const formData = new FormData();
+    formData.append('folder_name', folderName);
+    formData.append('destination', destination);
+    files.forEach(f => formData.append('files', f, f.name));
+
+    const btn = document.getElementById('upload-btn');
+    btn.disabled = true; btn.textContent = 'Uploading…';
+    resultEl.innerHTML = '';
+    document.getElementById('progress-wrap').style.display = 'block';
+
+    const xhr = new XMLHttpRequest();
+    xhr.upload.onprogress = e => {
+      if (e.lengthComputable) {
+        const pct = Math.round(e.loaded / e.total * 100);
+        document.getElementById('progress-bar').style.width = pct + '%';
+        document.getElementById('progress-text').textContent = pct + '%';
+      }
+    };
+    xhr.onload = () => {
+      btn.disabled = false; btn.textContent = 'Upload';
+      try {
+        const data = JSON.parse(xhr.responseText);
+        if (xhr.status === 200) {
+          resultEl.innerHTML = `<p style="color:#27ae60;font-weight:bold;margin-top:.8rem;">&#10003; ${data.count} file${data.count===1?'':'s'} saved to <code>${data.target}</code></p>`;
+          document.getElementById('progress-bar').style.background = '#27ae60';
+        } else {
+          resultEl.innerHTML = `<p class="error" style="margin-top:.8rem;">Error: ${data.error}</p>`;
+        }
+      } catch { resultEl.innerHTML = '<p class="error" style="margin-top:.8rem;">Unexpected server error.</p>'; }
+    };
+    xhr.onerror = () => { btn.disabled = false; btn.textContent = 'Upload'; resultEl.innerHTML = '<p class="error" style="margin-top:.8rem;">Network error.</p>'; };
+    xhr.open('POST', '/ui/upload');
+    xhr.send(formData);
+  }
+</script>
+{% endblock %}

@@ -1,0 +1,14 @@
+{% extends "base.html" %}
+{% block content %}
+<h1>{{ script }}</h1>
+
+<div class="alert {{ 'alert-success' if rc == 0 else 'alert-error' }}">
+  {% if rc == 0 %}Completed successfully (exit 0){% else %}Failed (exit {{ rc }}){% endif %}
+</div>
+
+<div class="card">
+  <pre>{{ output if output else "(no output)" }}</pre>
+</div>
+
+<a class="btn" href="/ui/">Back to Dashboard</a>
+{% endblock %}

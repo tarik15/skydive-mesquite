@@ -16,11 +16,17 @@ INSTALL_DIR="${INSTALL_DIR:-/usr/bin}"
 BACKUP_DIR="${BACKUP_DIR:-/var/backups/skydive-scripts}"
 STRAY_DIRS="${STRAY_DIRS:-/usr/bin /usr/local/bin}"
 CONFIG_FILE="${CONFIG_FILE:-/etc/skydive-media.conf}"
+NGINX_CONF_DIR="${NGINX_CONF_DIR:-/etc/nginx/conf.d}"
+NGINX_SNIPPET_DIR="${NGINX_SNIPPET_DIR:-/etc/nginx/snippets}"
+# Set SKIP_UI=1 to install only the shell scripts and skip the web UI.
+SKIP_UI="${SKIP_UI:-0}"
 SCRIPTS=(zipandmove funjumper rpi_back)
 
 REPO_DIR="$(cd "$(dirname "$0")" && pwd)"
 SRC_DIR="$REPO_DIR/scripts"
 CONFIG_EXAMPLE="$REPO_DIR/skydive-media.conf.example"
+ENV_FILE="$REPO_DIR/.env"
+ENV_EXAMPLE="$REPO_DIR/.env.example"
 TIMESTAMP="$(date +%Y%m%d%H%M%S)"
 
 fail() {
@@ -91,6 +97,67 @@ else
     echo "$updated script(s) changed. The previous versions are in $BACKUP_DIR."
 fi
 
+# ---------------------------------------------------------------------------
+# Web UI
+# ---------------------------------------------------------------------------
+# The container builds the scripts in from scripts/, the same directory this
+# installed to /usr/bin, so the web UI and the command line cannot drift apart.
+
+if [ "$SKIP_UI" = "1" ]; then
+    echo
+    echo "SKIP_UI=1, leaving the web UI alone."
+else
+    # .env holds the logins and the session key. Created once, never replaced.
+    if [ -e "$ENV_FILE" ]; then
+        echo "kept       $ENV_FILE"
+    elif [ -r "$ENV_EXAMPLE" ]; then
+        cp "$ENV_EXAMPLE" "$ENV_FILE" || fail "Could not create $ENV_FILE"
+        if key="$(python3 -c 'import secrets; print(secrets.token_hex(32))' 2>/dev/null)" ||
+           key="$(openssl rand -hex 32 2>/dev/null)"; then
+            sed -i "s|^SECRET_KEY=$|SECRET_KEY=$key|" "$ENV_FILE"
+        fi
+        # The repository is owned by the operator, not root; keep .env readable
+        # by whoever runs docker compose without sudo.
+        chown "$(stat -c '%U:%G' "$REPO_DIR")" "$ENV_FILE" 2>/dev/null
+        chmod 600 "$ENV_FILE"
+        echo "created    $ENV_FILE  (SECRET_KEY generated, passwords still blank)"
+    fi
+
+    # Nginx: the LAN vhost is a whole server block and can be dropped in. The
+    # public one is a set of location blocks that has to live inside the
+    # existing TLS server block, so it is installed as a snippet to include.
+    if [ -d "$NGINX_CONF_DIR" ]; then
+        cp "$REPO_DIR/nginx/local.conf" "$NGINX_CONF_DIR/skydive-local.conf" &&
+            echo "installed  $NGINX_CONF_DIR/skydive-local.conf"
+        mkdir -p "$NGINX_SNIPPET_DIR"
+        cp "$REPO_DIR/nginx/ui.conf" "$NGINX_SNIPPET_DIR/skydive-ui.conf" &&
+            echo "installed  $NGINX_SNIPPET_DIR/skydive-ui.conf"
+        if ! grep -rqs "snippets/skydive-ui.conf" "$NGINX_CONF_DIR"; then
+            echo
+            echo "WARNING: no site includes the web UI snippet yet. Add this line inside"
+            echo "         the \"listen 443 ssl\" server block of your site config, then"
+            echo "         run: sudo nginx -t && sudo systemctl reload nginx"
+            echo "             include $NGINX_SNIPPET_DIR/skydive-ui.conf;"
+        fi
+    fi
+
+    # Build and start the container. docker compose leaves the running
+    # container alone when the rebuild produces an identical image.
+    if command -v docker >/dev/null 2>&1; then
+        echo
+        echo "Building the web UI container..."
+        if (cd "$REPO_DIR" && docker compose up -d --build); then
+            echo "web UI is up"
+        else
+            echo "WARNING: docker compose failed. The shell scripts are installed and"
+            echo "         working; only the web UI is affected."
+        fi
+    else
+        echo
+        echo "WARNING: docker is not installed, so the web UI was not built."
+    fi
+fi
+
 # The rest are things a person has to decide about, not things to change here.
 if [ -r "$CONFIG_FILE" ]; then
     (
@@ -108,6 +175,34 @@ if [ -r "$CONFIG_FILE" ]; then
             echo "         and failures will not reach anyone."
         fi
     )
+fi
+
+if [ "$SKIP_UI" != "1" ] && [ -r "$ENV_FILE" ]; then
+    (
+        # shellcheck disable=SC1090
+        . "$ENV_FILE"
+        for var in SECRET_KEY ADMIN_PASSWORD STAFF_PASSWORD; do
+            if [ -z "$(eval "echo \${$var:-}")" ]; then
+                echo
+                echo "WARNING: $var is empty in $ENV_FILE. The web UI will not start"
+                echo "         until it is set. Edit the file, then run:"
+                echo "             cd $REPO_DIR && docker compose up -d"
+            fi
+        done
+    )
+fi
+
+if [ -r /etc/msmtprc ]; then
+    if [ -n "$(find /etc/msmtprc -maxdepth 0 -perm /o=r 2>/dev/null)" ]; then
+        echo
+        echo "WARNING: /etc/msmtprc is readable by every user on this machine and it"
+        echo "         holds the mail password. Restrict it with:"
+        echo "             sudo chmod 600 /etc/msmtprc"
+    fi
+else
+    echo
+    echo "WARNING: /etc/msmtprc does not exist, so nothing can send mail. Create it"
+    echo "         from docker/msmtprc.example and fill in the app password."
 fi
 
 # Older installs put copies in /usr/local/bin, sometimes named rpi_back.sh.

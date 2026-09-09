@@ -1,0 +1,80 @@
+#!/bin/bash
+#
+# Refuses a commit that contains a credential. This repository is public.
+#
+# Enable it once per clone:
+#
+#     git config core.hooksPath .githooks
+#
+# If it stops a commit you know is fine, commit with --no-verify, but read the
+# match first: it is easier to not publish a secret than to unpublish one.
+
+fail=0
+
+report() {
+    if [ "$fail" -eq 0 ]; then
+        echo "pre-commit: refusing to commit, this looks like a credential." >&2
+        echo >&2
+    fi
+    fail=1
+    echo "  $1" >&2
+}
+
+# Files that must never be committed, whatever they contain.
+while IFS= read -r file; do
+    case "$file" in
+        .env|*/.env|docker/msmtprc|msmtprc|*.htpasswd|skydive-media.conf)
+            report "$file is a live configuration file. Commit the .example instead."
+            ;;
+    esac
+done < <(git diff --cached --name-only --diff-filter=ACM)
+
+# Content that looks like a secret, checked only in the staged version.
+# Kept as two arrays rather than one delimited string: some of these patterns
+# contain every character that would make a sensible delimiter.
+patterns=(
+    'ghp_[A-Za-z0-9]{20,}'
+    'github_pat_[A-Za-z0-9_]{20,}'
+    'BEGIN [A-Z ]*PRIVATE KEY'
+    'AKIA[0-9A-Z]{16}'
+    'xox[baprs]-[A-Za-z0-9-]{10,}'
+    '://[^/[:space:]]+:[^/@[:space:]]+@'
+)
+labels=(
+    'a GitHub personal access token'
+    'a GitHub personal access token'
+    'a private key'
+    'an AWS access key'
+    'a Slack token'
+    'a URL with an embedded password'
+)
+
+while IFS= read -r file; do
+    [ -f "$file" ] || continue
+    case "$file" in *.png|*.jpg|*.jpeg|*.ico|*.gif|*.pdf) continue ;; esac
+    staged="$(git show ":$file" 2>/dev/null)" || continue
+    for i in "${!patterns[@]}"; do
+        if printf '%s' "$staged" | grep -qE "${patterns[$i]}"; then
+            report "$file contains what looks like ${labels[$i]}."
+        fi
+    done
+    # An msmtp password line that is not an obvious placeholder. Only msmtp
+    # config uses this "password <value>" shape; in source code a line like
+    # password = request.form.get("password") is perfectly normal.
+    case "$file" in
+        *msmtprc*)
+            if printf '%s' "$staged" | grep -qE '^[[:space:]]*password[[:space:]]+' &&
+               ! printf '%s' "$staged" | grep -qiE '^[[:space:]]*password[[:space:]]+(your_|placeholder|changeme|xxx|<)'; then
+                report "$file has a password line with a real looking value."
+            fi
+            ;;
+    esac
+done < <(git diff --cached --name-only --diff-filter=ACM)
+
+if [ "$fail" -ne 0 ]; then
+    echo >&2
+    echo "Nothing was committed. Move the value into a file listed in .gitignore" >&2
+    echo "and leave a placeholder in the .example, or use --no-verify if this is" >&2
+    echo "genuinely not a secret." >&2
+    exit 1
+fi

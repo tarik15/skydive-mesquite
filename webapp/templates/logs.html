@@ -1,0 +1,32 @@
+{% extends "base.html" %}
+{% block content %}
+<h1>Logs</h1>
+
+<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:1.25rem;">
+  <p style="color:var(--muted);font-size:.875rem;">Last 100 lines per log file.</p>
+  <a href="/ui/logs" class="btn" style="font-size:.8rem;padding:.35rem .9rem;">Reload</a>
+</div>
+
+{% set titles = {
+  "zipandmove": "zipandmove",
+  "funjumper":  "funjumper",
+  "rpi_back":   "rpi_back"
+} %}
+{% set paths = {
+  "zipandmove": "/home/monolith/zipandmove/zipandmove.log",
+  "funjumper":  "/home/monolith/zipandmove/fun.log",
+  "rpi_back":   "/var/log/rpi_backup.log"
+} %}
+
+{% for key in ["zipandmove", "funjumper", "rpi_back"] %}
+<details {% if key == "zipandmove" %}open{% endif %}>
+  <summary>
+    {{ titles[key] }}
+    <span style="font-weight:400;color:var(--muted);font-size:.8rem;margin-left:.25rem;">{{ paths[key] }}</span>
+  </summary>
+  <div class="log-body">
+    <pre>{{ logs[key] }}</pre>
+  </div>
+</details>
+{% endfor %}
+{% endblock %}
