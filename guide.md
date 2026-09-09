@@ -37,9 +37,9 @@ If you create the directories in the following sections while the disk is not mo
 
     `sudo nano /etc/fstab`
 
-    Add the following line, replacing the UUID with the one from step 1 and `ext4` with whatever `lsblk -f` reported as the filesystem:
+    Add the following line. This is the disk that is in service now, a 1.9 TB ext4 partition. If it has been replaced, use the UUID and filesystem that step 1 reported for the new one:
 ```fstab
-    UUID=xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx /media/nfs ext4 defaults,nofail,x-systemd.device-timeout=10 0 2
+    UUID=7a19384b-696a-4f1c-87aa-320653570f43 /media/nfs ext4 defaults,nofail,x-systemd.device-timeout=10 0 2
 ```
     `nofail` lets the Pi finish booting when the disk is missing or has died, instead of dropping to an emergency prompt on a machine that has no monitor attached. The tradeoff is that a missing disk is no longer obvious at boot, which is why the check in step 5 matters.
 
@@ -261,4 +261,4 @@ Before zipping, both scripts normalize the top level folder names in their drop 
 
 Both write progress to `/home/monolith/zipandmove/zipandmove.log` and `/home/monolith/zipandmove/fun.log` respectively. If a script reports that another instance is already running and you are certain it is not, check for a stale lock file in `/home/monolith/zipandmove/`.
 
-`rpi_back` runs from cron and logs to `/var/log/rpi_backup.log`. Its lock file is `/tmp/backup.lock`; if a backup is interrupted, that file may need to be removed by hand before the next run will start.
+`rpi_back` runs from cron, must be run as root, and logs to `/var/log/rpi_backup.log`. It e-mails `EMAIL_ADDRESS` whether it succeeds or fails, and the success message includes the size of the image it wrote. If a run is interrupted or the Pi loses power part way through, nothing needs cleaning up by hand: the lock is held on an open file descriptor and the kernel releases it automatically. A partial image is left behind on failure so it can be looked at, and the error message names it; delete it once you are done with it.
