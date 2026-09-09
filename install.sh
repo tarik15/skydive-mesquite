@@ -151,6 +151,19 @@ else
         else
             echo "WARNING: docker compose failed. The shell scripts are installed and"
             echo "         working; only the web UI is affected."
+            # The usual cause is an older stack still holding the port.
+            if docker ps --format '{{.Names}} {{.Ports}}' 2>/dev/null | grep -q '5000'; then
+                echo
+                echo "         Something is already listening on port 5000:"
+                docker ps --format '           {{.Names}}  ({{.Image}})' 2>/dev/null |
+                    grep -v 'skydive-mesquite' || true
+                echo
+                echo "         If that is the old canopy stack, stop it and try again:"
+                echo "             cd ~/canopy && docker compose down"
+                echo "         or, if that checkout is gone:"
+                echo "             docker stop canopy-ui-1 && docker rm canopy-ui-1"
+                echo "         then re-run this installer."
+            fi
         fi
     else
         echo

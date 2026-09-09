@@ -1,3 +1,8 @@
+# Pinned so the project name does not follow the directory name. Without this,
+# renaming or moving the checkout creates a second, separate stack that fights
+# the running one for port 5000 instead of replacing it.
+name: skydive-mesquite
+
 services:
   ui:
     build:

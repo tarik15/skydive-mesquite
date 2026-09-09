@@ -320,7 +320,17 @@ Staff use a small web interface instead of SSH. It runs in Docker as the `monoli
 
     The LAN-only vhost on port 8080 is a complete server block, so the installer drops it straight into `/etc/nginx/conf.d/skydive-local.conf` with nothing more to do.
 
-4.  Build and start it:
+4.  If this Pi previously ran the web UI from the separate `canopy` checkout, stop that stack first. It is a different Docker project, so it does not get replaced automatically and will hold port 5000 against the new one. Build first so the old interface keeps working until the moment of the swap:
+
+    `docker compose build`
+
+    `cd ~/canopy && docker compose down`
+
+    `cd ~/skydive-mesquite && docker compose up -d`
+
+    If the old checkout is gone, `docker stop canopy-ui-1 && docker rm canopy-ui-1` does the same job.
+
+5.  Build and start it:
 
     `sudo ./install.sh`
 
@@ -328,7 +338,7 @@ Staff use a small web interface instead of SSH. It runs in Docker as the `monoli
 
     `docker compose up -d --build`
 
-5.  Check it is up:
+6.  Check it is up:
 
     `docker compose ps`
 
