@@ -14,7 +14,17 @@ The scripts rely on `zip` and `mail`:
 
 `sudo apt install zip mailutils`
 
-Note: `mailutils` provides the `mail` command, but the Pi still needs a working mail transport (a local MTA or an SMTP relay) before any of the notification e-mails will actually leave the machine. If mail was previously configured on this Pi, restore that configuration as well, otherwise the scripts will still zip and publish media correctly but the e-mail steps will fail.
+`mailutils` provides the `mail` command, but that only hands a message to a mail transport. The Pi needs one configured before any notification e-mail actually leaves the machine. Without it the scripts still zip and publish media correctly, and the links are still written to the log and to `/media/nfs/web/media-files`, but the e-mail steps fail.
+
+This Pi relays through a Google account belonging to Skydive Mesquite. Find which tool is configured and keep a copy of its configuration, because this is the part of the system that is easiest to lose:
+
+`ls -la /etc/msmtprc /etc/ssmtp/ssmtp.conf /etc/postfix/main.cf 2>/dev/null`
+
+`dpkg -l | grep -E 'msmtp|ssmtp|postfix|exim'`
+
+Whichever it is, that file holds the account and the app password used to send. Back it up somewhere other than this repository, since it contains a credential. Test that sending works before relying on the backup notifications:
+
+`echo "test from the media server" | mail -s "media server test" you@example.com`
 
 Mounting the External Disk
 --------------------------
@@ -219,7 +229,7 @@ All three scripts live in `/usr/bin`, which is where the cron entry below expect
 3.  Check the notification e-mail addresses at the top of each script:
 
     - `zipandmove` sends the day's media links to `DESTINATION_EMAIL`, set to `skydive@skydivemesquite.com`.
-    - `rpi_back` sends backup successes and failures to `EMAIL_ADDRESS`, which is still the placeholder `admin@yourdoman.com` and needs to be set to whoever should be told when a backup fails.
+    - `rpi_back` sends backup successes and failures to `EMAIL_ADDRESS`, set to `tarik15@gmail.com`.
 
     `funjumper` prompts for its recipients when you run it, so it needs no edit.
 

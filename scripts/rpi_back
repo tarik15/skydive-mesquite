@@ -8,7 +8,7 @@ FILENAME="backup_${TIMESTAMP}.img"
 DESTINATION_FILE="${DESTINATION_DIR}/${FILENAME}"
 LOG_FILE="/var/log/rpi_backup.log"
 MAX_DAYS=90
-EMAIL_ADDRESS="admin@yourdoman.com"
+EMAIL_ADDRESS="tarik15@gmail.com"
 
 # Set the PATH variable
 PATH="/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/usr/local/games:/usr/games"
