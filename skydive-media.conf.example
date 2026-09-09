@@ -1,0 +1,23 @@
+# Configuration for the Skydive Mesquite media server scripts.
+#
+# Copy this to /etc/skydive-media.conf and fill in the addresses. It is kept
+# outside the git repository so the addresses can be changed on the Pi without
+# committing them, and so a "git pull" never overwrites them.
+#
+#     sudo cp skydive-media.conf.example /etc/skydive-media.conf
+#     sudo nano /etc/skydive-media.conf
+#     sudo chown root:root /etc/skydive-media.conf
+#     sudo chmod 644 /etc/skydive-media.conf
+#
+# install.sh creates it from this example if it is missing, and never
+# overwrites one that already exists.
+#
+# The file is read as shell by zipandmove and rpi_back, so it has to stay valid
+# shell: NAME="value", one per line, no spaces around the "=". rpi_back reads it
+# as root and refuses to read it if anyone other than root can write to it.
+
+# Where zipandmove sends the day's tandem media links.
+DESTINATION_EMAIL=""
+
+# Where rpi_back sends backup successes and failures.
+EMAIL_ADDRESS=""

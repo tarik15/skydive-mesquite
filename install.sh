@@ -15,9 +15,12 @@ set -u
 INSTALL_DIR="${INSTALL_DIR:-/usr/bin}"
 BACKUP_DIR="${BACKUP_DIR:-/var/backups/skydive-scripts}"
 STRAY_DIRS="${STRAY_DIRS:-/usr/bin /usr/local/bin}"
+CONFIG_FILE="${CONFIG_FILE:-/etc/skydive-media.conf}"
 SCRIPTS=(zipandmove funjumper rpi_back)
 
-SRC_DIR="$(cd "$(dirname "$0")" && pwd)/scripts"
+REPO_DIR="$(cd "$(dirname "$0")" && pwd)"
+SRC_DIR="$REPO_DIR/scripts"
+CONFIG_EXAMPLE="$REPO_DIR/skydive-media.conf.example"
 TIMESTAMP="$(date +%Y%m%d%H%M%S)"
 
 fail() {
@@ -68,6 +71,19 @@ for name in "${SCRIPTS[@]}"; do
     updated=$((updated + 1))
 done
 
+# The configuration holds the e-mail addresses and is deliberately not in the
+# repository, so it is created once and never overwritten by an update.
+if [ -e "$CONFIG_FILE" ]; then
+    echo "kept       $CONFIG_FILE"
+elif [ -r "$CONFIG_EXAMPLE" ]; then
+    cp "$CONFIG_EXAMPLE" "$CONFIG_FILE" || fail "Could not create $CONFIG_FILE"
+    [ "$(id -u)" -eq 0 ] && chown root:root "$CONFIG_FILE"
+    chmod 644 "$CONFIG_FILE"
+    echo "created    $CONFIG_FILE"
+else
+    echo "WARNING: $CONFIG_EXAMPLE is missing, so $CONFIG_FILE was not created."
+fi
+
 echo
 if [ "$updated" -eq 0 ]; then
     echo "Everything was already up to date."
@@ -76,10 +92,22 @@ else
 fi
 
 # The rest are things a person has to decide about, not things to change here.
-if grep -q 'yourdoman\|your@email\.com' "$INSTALL_DIR/rpi_back" 2>/dev/null; then
-    echo
-    echo "WARNING: $INSTALL_DIR/rpi_back still has a placeholder e-mail address."
-    echo "         Backup failures will not reach anyone until EMAIL_ADDRESS is set."
+if [ -r "$CONFIG_FILE" ]; then
+    (
+        # shellcheck disable=SC1090
+        . "$CONFIG_FILE"
+        if [ -z "${DESTINATION_EMAIL:-}" ]; then
+            echo
+            echo "WARNING: DESTINATION_EMAIL is not set in $CONFIG_FILE, so zipandmove"
+            echo "         will not e-mail the day's links. They still go to the log and"
+            echo "         to /media/nfs/web/media-files."
+        fi
+        if [ -z "${EMAIL_ADDRESS:-}" ]; then
+            echo
+            echo "WARNING: EMAIL_ADDRESS is not set in $CONFIG_FILE, so backup successes"
+            echo "         and failures will not reach anyone."
+        fi
+    )
 fi
 
 # Older installs put copies in /usr/local/bin, sometimes named rpi_back.sh.

@@ -25,6 +25,8 @@ sudo ./install.sh
 
 It refuses to install a script with a syntax error, keeps the previous version of anything it replaces in `/var/backups/skydive-scripts`, and reports what changed.
 
+The notification e-mail addresses are not in this repository. On the first run `install.sh` creates `/etc/skydive-media.conf` from [skydive-media.conf.example](skydive-media.conf.example) and never overwrites it afterwards, so a `git pull` cannot clobber local settings.
+
 ## Usage
 
 1. Follow the instructions provided in the [System Restoration Guide](guide.md) to set up the media server on your Raspberry Pi.

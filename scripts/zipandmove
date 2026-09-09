@@ -7,8 +7,12 @@ LOCKFILE=/home/monolith/zipandmove/zipandmove.lock
 LOGFILE=/home/monolith/zipandmove/zipandmove.log
 MEDIAFILES=/media/nfs/web/media-files
 
-# Set the email address for the destination
-DESTINATION_EMAIL="skydive@skydivemesquite.com"
+# Where to send the links. This lives outside the repository so it can be
+# changed on this machine without committing it, and so a "git pull" cannot
+# overwrite it. See skydive-media.conf.example.
+CONFIG_FILE="${CONFIG_FILE:-/etc/skydive-media.conf}"
+DESTINATION_EMAIL=""
+[ -r "$CONFIG_FILE" ] && . "$CONFIG_FILE"
 
 # Function to log a message to the logfile
 log() {
@@ -114,7 +118,11 @@ touch "$MEDIAFILES"
 log "Sending email with links"
 new_links=$(printf "%s\n" "${links[@]}")
 echo "$new_links" >> "$MEDIAFILES"
-echo "$new_links" | mail -s "Media links of $(date +%m-%d-%y)" "$DESTINATION_EMAIL"
+if [ -z "$DESTINATION_EMAIL" ]; then
+    log "No DESTINATION_EMAIL set in $CONFIG_FILE, so no e-mail was sent. The links are in $MEDIAFILES and below."
+elif ! echo "$new_links" | mail -s "Media links of $(date +%m-%d-%y)" "$DESTINATION_EMAIL"; then
+    log "Failed to e-mail the links to $DESTINATION_EMAIL. They are in $MEDIAFILES and below."
+fi
 
 # Print the links for reference
 log "Links:"

@@ -16,13 +16,21 @@ The scripts rely on `zip` and `mail`:
 
 `mailutils` provides the `mail` command, but that only hands a message to a mail transport. The Pi needs one configured before any notification e-mail actually leaves the machine. Without it the scripts still zip and publish media correctly, and the links are still written to the log and to `/media/nfs/web/media-files`, but the e-mail steps fail.
 
-This Pi relays through a Google account belonging to Skydive Mesquite. Find which tool is configured and keep a copy of its configuration, because this is the part of the system that is easiest to lose:
+This Pi sends through **msmtp**, relaying as a Google account belonging to Skydive Mesquite. Two packages provide it:
 
-`ls -la /etc/msmtprc /etc/ssmtp/ssmtp.conf /etc/postfix/main.cf 2>/dev/null`
+`sudo apt install msmtp msmtp-mta`
 
-`dpkg -l | grep -E 'msmtp|ssmtp|postfix|exim'`
+`msmtp-mta` is the part that makes `msmtp` answer to `mail`, so both are needed. The account and its Google app password live in `/etc/msmtprc`.
 
-Whichever it is, that file holds the account and the app password used to send. Back it up somewhere other than this repository, since it contains a credential. Test that sending works before relying on the backup notifications:
+That file is a credential and is not in this repository. Keep a copy somewhere safe and private, because without it the Pi can still publish media but cannot tell anyone about it. It must not be readable by other users on the Pi:
+
+`sudo chown root:root /etc/msmtprc`
+
+`sudo chmod 600 /etc/msmtprc`
+
+If the Google account is ever rebuilt, generate a fresh app password for it rather than using the account password.
+
+Test that sending works before relying on the backup notifications:
 
 `echo "test from the media server" | mail -s "media server test" you@example.com`
 
@@ -226,12 +234,21 @@ All three scripts live in `/usr/bin`, which is where the cron entry below expect
 
     `sudo INSTALL_DIR=/usr/local/bin ./install.sh`
 
-3.  Check the notification e-mail addresses at the top of each script:
+3.  Set the notification e-mail addresses. They are not in the repository, so that they can be changed here without committing them and so a `git pull` cannot overwrite them. `install.sh` creates `/etc/skydive-media.conf` from the example on the first run and never touches it again:
 
-    - `zipandmove` sends the day's media links to `DESTINATION_EMAIL`, set to `skydive@skydivemesquite.com`.
-    - `rpi_back` sends backup successes and failures to `EMAIL_ADDRESS`, set to `tarik15@gmail.com`.
+    `sudo nano /etc/skydive-media.conf`
+```bash
+    DESTINATION_EMAIL="office@example.com"
+    EMAIL_ADDRESS="admin@example.com"
+```
+    The addresses actually in use are not written down here, deliberately. They are in `/etc/skydive-media.conf` on the Pi, so keep a copy of that file with the `/etc/msmtprc` backup.
+    `DESTINATION_EMAIL` is where `zipandmove` sends the day's media links. `EMAIL_ADDRESS` is where `rpi_back` reports backup successes and failures. `funjumper` asks for its recipients when you run it, so it is not listed here.
 
-    `funjumper` prompts for its recipients when you run it, so it needs no edit.
+    `rpi_back` reads this file as root, so it must be owned by root and writable only by root, and it refuses to run otherwise:
+
+    `sudo chown root:root /etc/skydive-media.conf && sudo chmod 644 /etc/skydive-media.conf`
+
+    If an address is left empty the scripts still do their work; they log that no e-mail was sent, and `zipandmove` keeps the links in `/media/nfs/web/media-files`.
 
 4.  Automate the "rpi\_back" script. It runs on the 1st and 15th of each month at 01:00, which is the every-two-weeks cadence the backup routine is meant to have:
 

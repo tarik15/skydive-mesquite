@@ -8,7 +8,12 @@ FILENAME="backup_${TIMESTAMP}.img"
 DESTINATION_FILE="${DESTINATION_DIR}/${FILENAME}"
 LOG_FILE="/var/log/rpi_backup.log"
 MAX_DAYS=90
-EMAIL_ADDRESS="tarik15@gmail.com"
+
+# Where to send the notifications. This lives outside the repository so it can
+# be changed on this machine without committing it, and so a "git pull" cannot
+# overwrite it. See skydive-media.conf.example.
+CONFIG_FILE="${CONFIG_FILE:-/etc/skydive-media.conf}"
+EMAIL_ADDRESS=""
 
 # Set the PATH variable
 PATH="/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/usr/local/games:/usr/games"
@@ -18,6 +23,17 @@ PATH="/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/usr/local/ga
 if [ "$(id -u)" -ne 0 ]; then
     echo "rpi_back must be run as root, for example: sudo rpi_back" >&2
     exit 1
+fi
+
+# The configuration is read as shell by a script running as root, so anything
+# written in it runs as root. Refuse it if anyone other than root can write it.
+if [ -r "$CONFIG_FILE" ]; then
+    if [ -n "$(find "$CONFIG_FILE" -maxdepth 0 \( -perm /go=w -o ! -user root \))" ]; then
+        echo "$CONFIG_FILE must be owned by root and writable only by root." >&2
+        echo "Fix it with: sudo chown root:root $CONFIG_FILE && sudo chmod 644 $CONFIG_FILE" >&2
+        exit 1
+    fi
+    . "$CONFIG_FILE"
 fi
 
 # Function to log a message to the screen and the logfile
@@ -30,7 +46,12 @@ log() {
 send_email() {
     local subject="$1"
     local message="$2"
-    echo "$message" | mail -s "$subject" "$EMAIL_ADDRESS"
+    if [ -z "$EMAIL_ADDRESS" ]; then
+        log "No EMAIL_ADDRESS set in $CONFIG_FILE, so this was not sent: $subject"
+        return
+    fi
+    echo "$message" | mail -s "$subject" "$EMAIL_ADDRESS" ||
+        log "Failed to send the \"$subject\" e-mail to $EMAIL_ADDRESS."
 }
 
 # Function to report a failure and stop
