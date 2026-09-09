@@ -22,11 +22,21 @@ This Pi sends through **msmtp**, relaying as a Google account belonging to Skydi
 
 `msmtp-mta` is the part that makes `msmtp` answer to `mail`, so both are needed. The account and its Google app password live in `/etc/msmtprc`.
 
-That file is a credential and is not in this repository. Keep a copy somewhere safe and private, because without it the Pi can still publish media but cannot tell anyone about it. It must not be readable by other users on the Pi:
+That file is a credential and is not in this repository. Keep a copy somewhere safe and private, because without it the Pi can still publish media but cannot tell anyone about it.
 
-`sudo chown root:root /etc/msmtprc`
+It should not be readable by every account on the Pi, but it does have to stay readable by the account that runs `zipandmove` and `funjumper`, or those two silently lose the ability to send. Leaving it owned by `monolith` and taking away everyone else's access achieves both, and root can still read it for `rpi_back`:
 
 `sudo chmod 600 /etc/msmtprc`
+
+Then check that both accounts can still send, since `rpi_back` runs as root and the other two do not:
+
+`echo "test as monolith" | mail -s "msmtp test" you@example.com`
+
+`sudo bash -c 'echo "test as root" | mail -s "msmtp test" you@example.com'`
+
+If the root test fails, give root its own copy with the same permissions:
+
+`sudo cp /etc/msmtprc /root/.msmtprc && sudo chmod 600 /root/.msmtprc`
 
 If the Google account is ever rebuilt, generate a fresh app password for it rather than using the account password.
 
