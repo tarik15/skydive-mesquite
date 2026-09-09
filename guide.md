@@ -1,7 +1,7 @@
 System Restoration Guide for Raspberry Pi
 =========================================
 
-This guide will walk you through the process of restoring a Raspberry Pi system to run the server developed by Tarik. This server enables Skydive Mesquite to have their own local server and provide links for customers to download their jump media. The server is controlled by Nginx, files are read from a shared NFS folder, and most of the system is managed through the shell scripts "zipandmove" (tandem media) and "funjumper" (fun jumper media). Additionally, there is a backup routine that saves an image of the entire system to `/media/nfs/pi-backup`.
+This guide will walk you through the process of restoring a Raspberry Pi system to run the server developed by Tarik. This server enables Skydive Mesquite to have their own local server and provide links for customers to download their jump media. The server is controlled by Nginx, files are read from a shared NFS folder, and most of the system is managed through the shell scripts "zipandmove" (tandem media) and "funjumper" (fun jumper media). Additionally, there is a backup routine that saves an image of the entire system to `/media/nfs/pi-backup` on the external disk.
 
 Everything below matches what the scripts in `scripts/` actually do. If you change a path here, change it in the scripts too.
 
@@ -16,6 +16,45 @@ The scripts rely on `zip` and `mail`:
 
 Note: `mailutils` provides the `mail` command, but the Pi still needs a working mail transport (a local MTA or an SMTP relay) before any of the notification e-mails will actually leave the machine. If mail was previously configured on this Pi, restore that configuration as well, otherwise the scripts will still zip and publish media correctly but the e-mail steps will fail.
 
+Mounting the External Disk
+--------------------------
+
+All of the media, the backups, and the directory shared over NFS live on an external disk mounted at `/media/nfs`. Mount it before anything else.
+
+If you create the directories in the following sections while the disk is not mounted, they are silently created on the SD card instead. Everything appears to work and media publishes normally, so the problem only shows up later, either when the card fills up or when the disk is finally mounted over the top and the files seem to have disappeared.
+
+1.  Attach the disk and identify it:
+
+    `lsblk -f`
+
+    Find the external disk's partition, for example `sda1`, and note its `UUID` and `FSTYPE`. Mount by UUID rather than by `/dev/sda1`, because device names can change depending on what is plugged in at boot.
+
+2.  Create the mount point:
+
+    `sudo mkdir -p /media/nfs`
+
+3.  Add the disk to the filesystem table:
+
+    `sudo nano /etc/fstab`
+
+    Add the following line, replacing the UUID with the one from step 1 and `ext4` with whatever `lsblk -f` reported as the filesystem:
+```fstab
+    UUID=xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx /media/nfs ext4 defaults,nofail,x-systemd.device-timeout=10 0 2
+```
+    `nofail` lets the Pi finish booting when the disk is missing or has died, instead of dropping to an emergency prompt on a machine that has no monitor attached. The tradeoff is that a missing disk is no longer obvious at boot, which is why the check in step 5 matters.
+
+4.  Mount it:
+
+    `sudo mount -a`
+
+5.  Confirm it actually mounted before going any further:
+
+    `mountpoint /media/nfs`
+
+    This must report that `/media/nfs` is a mountpoint. If it does not, stop and fix the mount. Every section below assumes `/media/nfs` is the external disk.
+
+The filesystem should be a Linux one, normally `ext4`. NTFS and exFAT do not record Unix ownership, so the `chown` in "Creating the Directory Layout" would not stick and the `anonuid`/`anongid` settings on the NFS export would not behave as described below.
+
 Setting up NFS Server for Other Machines
 ----------------------------------------
 
@@ -27,9 +66,9 @@ Setting up NFS Server for Other Machines
 
     `sudo systemctl enable --now nfs-server`
 
-3.  Create the directory to be shared with others:
+3.  Confirm the external disk is mounted at `/media/nfs`, which is the directory that will be shared:
 
-    `sudo mkdir -p /media/nfs`
+    `mountpoint /media/nfs`
 
 4.  Edit the NFS configuration file:
 
@@ -46,7 +85,11 @@ Setting up NFS Server for Other Machines
 Creating the Directory Layout
 -----------------------------
 
-The scripts do not create most of their working directories, and they will fail if these are missing. Create all of them up front:
+The scripts do not create most of their working directories, and they will fail if these are missing. First confirm the external disk is still mounted, otherwise these directories end up on the SD card:
+
+`mountpoint /media/nfs`
+
+Then create all of them up front:
 
 ```bash
 sudo mkdir -p /media/nfs/share \
@@ -153,20 +196,30 @@ The `alias` must point at `/media/nfs/web/`, which is where `zipandmove` and `fu
 Installing the Scripts
 ----------------------
 
-All three scripts go in `/usr/local/bin`, which is where the cron entries below expect them.
+All three scripts live in `/usr/bin`, which is where the cron entry below expects them. `install.sh` in this repository puts them there.
 
-1.  Copy the scripts into place:
+1.  Get the repository onto the Pi, or update the copy that is already on it:
 
-    `sudo cp ~/Documents/zipandmove ~/Documents/funjumper ~/Documents/rpi_back /usr/local/bin`
+    `git clone git@github.com:tarik15/skydive-mesquite.git`
 
-2.  Make them executable:
+    or, from inside an existing clone:
 
-    `sudo chmod +x /usr/local/bin/zipandmove /usr/local/bin/funjumper /usr/local/bin/rpi_back`
+    `git pull`
 
-3.  Set the notification e-mail addresses. Both scripts ship with placeholder addresses that must be changed:
+2.  Install the scripts:
 
-    - `zipandmove` -> `DESTINATION_EMAIL` (currently `your@email.com`)
-    - `rpi_back` -> `EMAIL_ADDRESS` (currently `admin@yourdoman.com`)
+    `sudo ./install.sh`
+
+    It checks every script for syntax errors before installing any of them, so a bad pull cannot leave the system half updated. Each script it replaces is copied to `/var/backups/skydive-scripts` first, and it reports what changed. Run it again after every `git pull`; when nothing has changed it says so and does nothing.
+
+    To install somewhere other than `/usr/bin`, set `INSTALL_DIR`:
+
+    `sudo INSTALL_DIR=/usr/local/bin ./install.sh`
+
+3.  Check the notification e-mail addresses at the top of each script:
+
+    - `zipandmove` sends the day's media links to `DESTINATION_EMAIL`, set to `skydive@skydivemesquite.com`.
+    - `rpi_back` sends backup successes and failures to `EMAIL_ADDRESS`, which is still the placeholder `admin@yourdoman.com` and needs to be set to whoever should be told when a backup fails.
 
     `funjumper` prompts for its recipients when you run it, so it needs no edit.
 
@@ -174,8 +227,25 @@ All three scripts go in `/usr/local/bin`, which is where the cron entries below 
 
     `sudo crontab -e`
 ```crontab
-    0 1 1,15 * * /usr/local/bin/rpi_back
+    0 1 1,15 * * /usr/bin/rpi_back
 ```
+    The path in the crontab must match where `install.sh` put the script. If the two disagree, cron silently runs nothing and the backups stop without any warning. This has happened before: the crontab called `/usr/local/bin/rpi_back.sh` while the script lived in `/usr/bin`, and no backups were taken at all.
+
+5.  If this Pi had an older install, remove the leftovers so nothing can run an out of date copy. `install.sh` names any it finds:
+
+    `sudo rm -f /usr/local/bin/rpi_back /usr/local/bin/rpi_back.sh /usr/local/bin/zipandmove /usr/local/bin/funjumper`
+
+    Then confirm the crontab has exactly one `rpi_back` line and that it points at `/usr/bin/rpi_back`:
+
+    `sudo crontab -l | grep rpi_back`
+
+6.  Take the first backup by hand instead of waiting for cron, and confirm it lands:
+
+    `sudo /usr/bin/rpi_back`
+
+    `ls -lh /media/nfs/pi-backup`
+
+    This copies the whole SD card, so it takes a while and the image is as large as the card. Check there is room for it first with `df -h /media/nfs`, and remember `MAX_DAYS` in the script keeps 90 days of images.
 Running the Scripts
 -------------------
 

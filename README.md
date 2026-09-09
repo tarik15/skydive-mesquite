@@ -14,6 +14,17 @@ The [System Restoration Guide](guide.md) provides a detailed step-by-step walkth
 
 - [funjumper](scripts/funjumper): This shell script is similar to [zipandmove](scripts/zipandmove) but sends the links to e-mails you provide while running it.
   
+## Installing
+
+Run [install.sh](install.sh) after cloning or pulling this repository to copy the scripts into `/usr/bin`:
+
+```
+git pull
+sudo ./install.sh
+```
+
+It refuses to install a script with a syntax error, keeps the previous version of anything it replaces in `/var/backups/skydive-scripts`, and reports what changed.
+
 ## Usage
 
 1. Follow the instructions provided in the [System Restoration Guide](guide.md) to set up the media server on your Raspberry Pi.
