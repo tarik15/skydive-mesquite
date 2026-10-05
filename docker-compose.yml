@@ -20,6 +20,7 @@ services:
       - /home/monolith/zipandmove:/home/monolith/zipandmove
       - /var/log/rpi_backup.log:/var/log/rpi_backup.log:ro
       - /etc/msmtprc:/etc/msmtprc:ro
+      - /etc/skydive-media.conf:/etc/skydive-media.conf:ro
       - /var/log/msmtp:/var/log/msmtp
     environment:
       - SECRET_KEY=${SECRET_KEY}

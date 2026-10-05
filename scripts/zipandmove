@@ -124,7 +124,9 @@ touch "$MEDIAFILES"
 log "Sending email with links"
 new_links=$(printf "%s\n" "${links[@]}")
 echo "$new_links" >> "$MEDIAFILES"
-if [ -z "$DESTINATION_EMAIL" ]; then
+if [ ! -r "$CONFIG_FILE" ]; then
+    log "Could not read $CONFIG_FILE, so no e-mail was sent. The links are in $MEDIAFILES and below."
+elif [ -z "$DESTINATION_EMAIL" ]; then
     log "No DESTINATION_EMAIL set in $CONFIG_FILE, so no e-mail was sent. The links are in $MEDIAFILES and below."
 elif ! echo "$new_links" | mail -s "Media links of $(date +%m-%d-%y)" "$DESTINATION_EMAIL"; then
     log "Failed to e-mail the links to $DESTINATION_EMAIL. They are in $MEDIAFILES and below."

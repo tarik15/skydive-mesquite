@@ -116,4 +116,5 @@ The container runs as `monolith` with the UID/GID from `.env`. This must match t
 | `/home/monolith/zipandmove` | Script logs and lock files |
 | `/var/log/rpi_backup.log` | Read-only; shown on Logs page |
 | `/etc/msmtprc` | Read-only; Gmail SMTP config |
+| `/etc/skydive-media.conf` | Read-only; `DESTINATION_EMAIL` for `zipandmove` |
 | `/var/log/msmtp` | msmtp log (shared with Pi; created by msmtp on first use — no manual setup needed) |
