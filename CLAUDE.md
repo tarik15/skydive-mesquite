@@ -22,6 +22,8 @@ docker compose up -d --build
 docker compose logs -f
 ```
 
+Deploying to the Pi: `ssh -A monolith` (an alias in the local `~/.ssh/config`; the public host and port are kept out of this repo), then `cd ~/skydive-mesquite && git pull && sudo ./install.sh`. The `-A` is required: the Pi has no GitHub key and pulls with the forwarded local key. A pull alone changes nothing that is running; `install.sh` copies the scripts and recreates the container.
+
 The container binds to `127.0.0.1:5000`. Nginx proxies `/ui` to it (see `nginx/ui.conf`).
 
 Local dev without Docker:
@@ -82,6 +84,8 @@ The Fun Jumper page warns (JS `confirm()`) if the user tries to send links witho
 ## Mail
 
 The container and the Pi both send mail directly to Gmail via msmtp (smtp.gmail.com:587, App Password). The Pi's `/etc/msmtprc` is mounted into the container read-only. `docker/msmtprc.example` is the template; the real file exists only on the Pi and is git-ignored. `/var/log/msmtp` is bind-mounted so both the container and Pi-direct runs log to the same file.
+
+`/etc/skydive-media.conf` is also mounted read-only into the container; without it `zipandmove` run from the Tandem page sees no `DESTINATION_EMAIL` and sends nothing.
 
 `/etc/msmtprc` must stay readable by the `monolith` user, since `zipandmove` and `funjumper` run as that user and the container runs with the same UID. `chmod 600` owned by `monolith` is right; chowning it to root would silently break sending.
 

@@ -234,6 +234,14 @@ All three scripts live in `/usr/bin`, which is where the cron entry below expect
 
     `git pull`
 
+    The Pi has no GitHub key of its own; it borrows yours. Connect with agent forwarding from a computer whose SSH key is on the GitHub account, or the clone and pull are refused:
+
+    `ssh -A monolith`
+
+    `monolith` here is a `Host` entry in that computer's `~/.ssh/config` giving the Pi's public address, port and user `monolith`. The address is deliberately not written in this repository.
+
+    If the key is not loaded on that computer yet, run `ssh-add` there first. `ssh-add -l` lists the keys that will be forwarded.
+
 2.  Install the scripts:
 
     `sudo ./install.sh`
@@ -254,11 +262,13 @@ All three scripts live in `/usr/bin`, which is where the cron entry below expect
     The addresses actually in use are not written down here, deliberately. They are in `/etc/skydive-media.conf` on the Pi, so keep a copy of that file with the `/etc/msmtprc` backup.
     `DESTINATION_EMAIL` is where `zipandmove` sends the day's media links. `EMAIL_ADDRESS` is where `rpi_back` reports backup successes and failures. `funjumper` asks for its recipients when you run it, so it is not listed here.
 
+    The web UI container reads the same file, mounted read-only, so the Tandem page sends the links to the same address. It runs as `monolith`, which is why the file must stay readable by everyone (644) rather than 600.
+
     `rpi_back` reads this file as root, so it must be owned by root and writable only by root, and it refuses to run otherwise:
 
     `sudo chown root:root /etc/skydive-media.conf && sudo chmod 644 /etc/skydive-media.conf`
 
-    If an address is left empty the scripts still do their work; they log that no e-mail was sent, and `zipandmove` keeps the links in `/media/nfs/web/media-files`.
+    If an address is left empty the scripts still do their work; they log that no e-mail was sent, and `zipandmove` keeps the links in `/media/nfs/web/media-files`. If `zipandmove` logs "Could not read /etc/skydive-media.conf" instead, the address may be fine but the file is missing or unreadable; check its permissions, and that the container was recreated with `sudo ./install.sh` after the last pull.
 
 4.  Automate the "rpi\_back" script. It runs on the 1st and 15th of each month at 01:00, which is the every-two-weeks cadence the backup routine is meant to have:
 

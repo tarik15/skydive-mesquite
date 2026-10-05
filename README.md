@@ -49,6 +49,12 @@ git pull
 sudo ./install.sh
 ```
 
+The Pi has no GitHub key of its own, so pull over an SSH session with agent forwarding from a computer whose key is on GitHub:
+
+```
+ssh -A monolith
+```
+
 To update only the shell scripts and leave the web UI running untouched:
 
 ```
